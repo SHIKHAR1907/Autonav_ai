@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoNav AI - High-Difficulty Autonomous Navigation Simulation</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+        }
+        body {
+            overflow: hidden;
+            background-color: #080c14;
+            color: #ffffff;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        /* Top Navigation HUD */
+        .hud-header {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .title-badge {
+            background: rgba(8, 12, 20, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            padding: 14px 22px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .title-badge h1 {
+            font-size: 1.3rem;
+            color: #f87171;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .title-badge p {
+            font-size: 0.82rem;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        .telemetry-card {
+            background: rgba(8, 12, 20, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 12px 24px;
+            border-radius: 12px;
+            display: flex;
+            gap: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 0.68rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+        /* Status Banner */
+        #status-banner {
+            position: absolute;
+            top: 95px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 9px 28px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 0.04em;
+            background: rgba(34, 197, 94, 0.22);
+            color: #4ade80;
+            border: 1px solid #22c55e;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #status-banner.warning {
+            background: rgba(234, 179, 8, 0.25);
+            color: #facc15;
+            border-color: #eab308;
+            box-shadow: 0 0 22px rgba(234, 179, 8, 0.5);
+        }
+        #status-banner.danger {
+            background: rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+            border-color: #ef4444;
+            box-shadow: 0 0 26px rgba(239, 68, 68, 0.7);
+        }
+        #status-banner.reversing {
+            background: rgba(168, 85, 247, 0.35);
+            color: #d8b4fe;
+            border-color: #c084fc;
+            box-shadow: 0 0 26px rgba(168, 85, 247, 0.7);
+        }
+        #status-banner.success {
+            background: rgba(56, 189, 248, 0.35);
+            color: #38bdf8;
+            border-color: #38bdf8;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.8);
+            animation: pulse-glow 1.5s infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+        }
+        /* Mini-Map Radar */
+        #minimap-container {
+            position: absolute;
+            top: 85px;
+            right: 20px;
+            width: 175px;
+            height: 175px;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(239, 68, 68, 0.5);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+            z-index: 10;
+            cursor: crosshair;
+        }
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .minimap-label {
+            position: absolute;
+            top: 4px;
+            left: 8px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #f87171;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
+        /* Bottom Control Bar */
+        .controls-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 12, 20, 0.94);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 18px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+            max-width: 96vw;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 7px 13px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s ease;
+        }
+        .btn:hover {
+            background: #334155;
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+        }
+        .btn-diff {
+            font-weight: 700;
+        }
+        .btn-diff.diff-easy { border-color: #22c55e; color: #4ade80; }
+        .btn-diff.diff-med { border-color: #eab308; color: #facc15; }
+        .btn-diff.diff-hard { border-color: #f97316; color: #fb923c; }
+        .btn-diff.diff-extreme { border-color: #ef4444; color: #f87171; background: rgba(239, 68, 68, 0.15); }
+        .btn-diff.active {
+            background: #ef4444;
+            color: white;
+            border-color: #ef4444;
+            box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+        }
+        .btn-gold {
+            background: #b45309;
+            color: #ffffff;
+            border-color: #f59e0b;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+        }
+        input[type="range"] {
+            accent-color: #ef4444;
+            cursor: pointer;
+            width: 70px;
+        }
+        .divider {
+            width: 1px;
+            height: 22px;
+            background: rgba(255,255,255,0.18);
+        }
+        .click-hint {
+            position: absolute;
+            bottom: 76px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            padding: 5px 16px;
+            border-radius: 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+    </style>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="hud-header">
+        <div class="title-badge">
+            <h1>🔥 AutoNav AI: Extreme Obstacle Maze & Dynamic Patrols</h1>
+            <p>Moving Hazards, Canyon Walls, Mud Traps & Auto-Reverse Recovery!</p>
+        </div>
+        <div class="telemetry-card">
+            <div class="stat-item">
+                <div class="stat-label">Distance to Goal</div>
+                <div class="stat-value" id="val-goal-dist">0.0 m</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Vehicle Speed</div>
+                <div class="stat-value" id="val-speed">32 km/h</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Gear Mode</div>
+                <div class="stat-value" id="val-gear" style="color: #4ade80;">FORWARD</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Moving Hazards</div>
+                <div class="stat-value" id="val-patrols" style="color: #f87171;">6 Active</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Evaded Total</div>
+                <div class="stat-value" id="val-avoided">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini-Map Radar -->
+    <div id="minimap-container" title="Click mini-map to relocate destination">
+        <div class="minimap-label">📡 Radar Map</div>
+        <canvas id="minimap-canvas" width="175" height="175"></canvas>
+    </div>
+
+    <div id="status-banner">🟢 NAVIGATING HIGH-DIFFICULTY TERRAIN...</div>
+    <div class="click-hint">🎯 <b>CLICK ANYWHERE ON TERRAIN</b> to set destination! Watch vehicle weave through walls, mud, and moving hazards.</div>
+
+    <div class="controls-panel">
+        <button class="btn" id="btn-play-pause">⏸️ Pause</button>
+        <button class="btn btn-gold" id="btn-random-goal">🎯 Random Goal</button>
+
+        <div class="divider"></div>
+
+        <span style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">Difficulty:</span>
+        <button class="btn btn-diff diff-easy" data-diff="easy">Easy (30)</button>
+        <button class="btn btn-diff diff-med" data-diff="medium">Med (60)</button>
+        <button class="btn btn-diff diff-hard" data-diff="hard">Hard (90)</button>
+        <button class="btn btn-diff diff-extreme active" data-diff="extreme">Extreme (120+)</button>
+
+        <div class="divider"></div>
+
+        <button class="btn" id="btn-reset-car">🔄 Reset Car</button>
+
+        <div class="slider-group">
+            <span>Speed:</span>
+            <input type="range" id="speed-slider" min="10" max="60" value="32">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="slider-group">
+            <span>Cam:</span>
+            <button class="btn active" id="cam-chase">Chase</button>
+            <button class="btn" id="cam-top">Top</button>
+            <button class="btn" id="cam-hood">Hood</button>
+            <button class="btn" id="cam-free">Free</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. THREE.JS SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x080c14);
+        scene.fog = new THREE.FogExp2(0x080c14, 0.005);
+
+        const camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.04;
+
+        // --- 2. LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffedd5, 0.9);
+        sunLight.position.set(70, 110, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 320;
+        const d = 120;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        scene.add(sunLight);
+
+        // --- 3. LARGE DIFFICULT TERRAIN ARENA ---
+        const TERRAIN_SIZE = 240; // 240m x 240m rugged arena
+
+        const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 32, 32);
+        const terrainMat = new THREE.MeshStandardMaterial({
+            color: 0x142017, // Dark off-road rugged mud/dirt
+            roughness: 0.95,
+            metalness: 0.1
+        });
+        const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+        terrain.rotation.x = -Math.PI / 2;
+        terrain.receiveShadow = true;
+        scene.add(terrain);
+
+        // Subtle topographic grid
+        const gridHelper = new THREE.GridHelper(TERRAIN_SIZE, 48, 0xef4444, 0x1e293b);
+        gridHelper.position.y = 0.02;
+        scene.add(gridHelper);
+
+        // Perimeter boundary concrete barricades
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+        const wallH = 3.0;
+
+        const northWall = new THREE.Mesh(new THREE.BoxGeometry(TERRAIN_SIZE, wallH, 2.0), wallMat);
+        northWall.position.set(0, wallH / 2, -TERRAIN_SIZE / 2);
+        scene.add(northWall);
+
+        const southWall = new THREE.Mesh(new THREE.BoxGeometry(TERRAIN_SIZE, wallH, 2.0), wallMat);
+        southWall.position.set(0, wallH / 2, TERRAIN_SIZE / 2);
+        scene.add(southWall);
+
+        const eastWall = new THREE.Mesh(new THREE.BoxGeometry(2.0, wallH, TERRAIN_SIZE), wallMat);
+        eastWall.position.set(TERRAIN_SIZE / 2, wallH / 2, 0);
+        scene.add(eastWall);
+
+        const westWall = new THREE.Mesh(new THREE.BoxGeometry(2.0, wallH, TERRAIN_SIZE), wallMat);
+        westWall.position.set(-TERRAIN_SIZE / 2, wallH / 2, 0);
+        scene.add(westWall);
+
+        // --- 4. MUD & SLIP HAZARD ZONES (SLOWDOWN PATCHES) ---
+        const mudPits = [
+            { x: -25, z: -30, radius: 16 },
+            { x: 35, z: 25, radius: 18 },
+            { x: -45, z: 40, radius: 15 },
+            { x: 30, z: -55, radius: 14 }
+        ];
+
+        mudPits.forEach(pit => {
+            const pitGeo = new THREE.CircleGeometry(pit.radius, 24);
+            const pitMat = new THREE.MeshStandardMaterial({
+                color: 0x3d2817, // Wet muddy brown
+                roughness: 0.3,  // Slippery reflective
+                metalness: 0.2
+            });
+            const pitMesh = new THREE.Mesh(pitGeo, pitMat);
+            pitMesh.rotation.x = -Math.PI / 2;
+            pitMesh.position.set(pit.x, 0.03, pit.z);
+            scene.add(pitMesh);
+
+            // Mud caution border ring
+            const ringMesh = new THREE.Mesh(
+                new THREE.RingGeometry(pit.radius - 0.4, pit.radius, 24),
+                new THREE.MeshBasicMaterial({ color: 0xb45309, side: THREE.DoubleSide })
+            );
+            ringMesh.rotation.x = -Math.PI / 2;
+            ringMesh.position.set(pit.x, 0.04, pit.z);
+            scene.add(ringMesh);
+        });
+
+        // --- 5. DESTINATION BEACON ---
+        const destination = { x: 65, z: -70 };
+
+        const beaconGroup = new THREE.Group();
+
+        // Sky beam
+        const pillar = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.35, 0.35, 60, 16),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 })
+        );
+        pillar.position.y = 30;
+        beaconGroup.add(pillar);
+
+        // Ground rings
+        const outerRing = new THREE.Mesh(
+            new THREE.RingGeometry(2.2, 2.9, 32),
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+        );
+        outerRing.rotation.x = -Math.PI / 2;
+        outerRing.position.y = 0.15;
+        beaconGroup.add(outerRing);
+
+        const innerRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.7, 1.2, 32),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+        );
+        innerRing.rotation.x = -Math.PI / 2;
+        innerRing.position.y = 0.16;
+        beaconGroup.add(innerRing);
+
+        // Floating Diamond
+        const diamond = new THREE.Mesh(
+            new THREE.OctahedronGeometry(1.6),
+            new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xd97706, roughness: 0.2, metalness: 0.8 })
+        );
+        diamond.position.y = 4.5;
+        diamond.castShadow = true;
+        beaconGroup.add(diamond);
+
+        beaconGroup.position.set(destination.x, 0, destination.z);
+        scene.add(beaconGroup);
+
+        function updateDestination(x, z) {
+            const bound = TERRAIN_SIZE / 2 - 15;
+            destination.x = Math.max(-bound, Math.min(bound, x));
+            destination.z = Math.max(-bound, Math.min(bound, z));
+            beaconGroup.position.set(destination.x, 0, destination.z);
+
+            hasArrived = false;
+            document.getElementById('status-banner').className = '';
+            document.getElementById('status-banner').innerText = '🟢 RE-CALCULATING TRAJECTORY TO NEW WAYPOINT...';
+        }
+
+        // --- 6. 3D AUTONOMOUS CAR MODEL ---
+        const car = new THREE.Group();
+
+        // Body
+        const bodyGeo = new THREE.BoxGeometry(2.3, 0.9, 4.3);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.6, roughness: 0.25 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.88;
+        body.castShadow = true;
+        car.add(body);
+
+        // Cabin
+        const cabin = new THREE.Mesh(
+            new THREE.BoxGeometry(1.8, 0.78, 2.3),
+            new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.5 })
+        );
+        cabin.position.set(0, 1.55, -0.2);
+        cabin.castShadow = true;
+        car.add(cabin);
+
+        // 4 Off-road wheels
+        const wheelGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.48, 16);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.95 });
+        const wheels = [];
+
+        [
+            [-1.2, 0.52, 1.3],
+            [1.2, 0.52, 1.3],
+            [-1.2, 0.52, -1.3],
+            [1.2, 0.52, -1.3]
+        ].forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(pos[0], pos[1], pos[2]);
+            wheel.castShadow = true;
+            car.add(wheel);
+            wheels.push(wheel);
+        });
+
+        // Headlights
+        const headMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const hlL = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), headMat);
+        hlL.position.set(-0.78, 0.88, 2.16);
+        car.add(hlL);
+
+        const hlR = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), headMat);
+        hlR.position.set(0.78, 0.88, 2.16);
+        car.add(hlR);
+
+        // Headlight Spotlights
+        const spotL = new THREE.SpotLight(0x38bdf8, 2.2, 30, Math.PI / 5, 0.4);
+        spotL.position.set(-0.78, 0.88, 2.15);
+        spotL.target.position.set(-0.78, 0, 18);
+        car.add(spotL);
+        car.add(spotL.target);
+
+        const spotR = new THREE.SpotLight(0x38bdf8, 2.2, 30, Math.PI / 5, 0.4);
+        spotR.position.set(0.78, 0.88, 2.15);
+        spotR.target.position.set(0.78, 0, 18);
+        car.add(spotR);
+        car.add(spotR.target);
+
+        // Roof LiDAR Dome
+        const lidarDome = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.3, 0.35, 16),
+            new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.9 })
+        );
+        lidarDome.position.set(0, 2.0, -0.2);
+        car.add(lidarDome);
+
+        car.position.set(0, 0, 0);
+        scene.add(car);
+
+        // --- 7. MULTI-BEAM LIDAR SENSORS (19 HIGH-DENSITY SCANNING RAYS) ---
+        const SENSOR_RANGE = 28;
+        const NUM_RAYS = 19;
+        const rayLines = [];
+        const baseRayMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 2, transparent: true, opacity: 0.85 });
+
+        for (let i = 0; i < NUM_RAYS; i++) {
+            const angleOffset = (i / (NUM_RAYS - 1) - 0.5) * 2.0; // ~115 degree wide field of view
+            const geom = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0.88, 2.1),
+                new THREE.Vector3(Math.sin(angleOffset) * SENSOR_RANGE, 0.4, Math.cos(angleOffset) * SENSOR_RANGE)
+            ]);
+            const line = new THREE.Line(geom, baseRayMat.clone());
+            car.add(line);
+            rayLines.push({ line, angleOffset, length: SENSOR_RANGE });
+        }
+
+        // --- 8. DIFFICULT OBSTACLES: WALLS, SLALOMS, BOULDERS & DYNAMIC MOVING PATROLS ---
+        let staticObstacles = [];
+        let movingPatrols = [];
+        let mazeWalls = [];
+
+        // Mesh Generators
+        function createBoulder() {
+            const geo = new THREE.DodecahedronGeometry(1.4 + Math.random() * 0.7);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9 });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.y = 1.2;
+            m.rotation.set(Math.random(), Math.random(), Math.random());
+            m.castShadow = true;
+            m.receiveShadow = true;
+            return m;
+        }
+
+        function createDenseTree() {
+            const g = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 3.5, 6), new THREE.MeshStandardMaterial({ color: 0x452310 }));
+            trunk.position.y = 1.75;
+            trunk.castShadow = true;
+            g.add(trunk);
+
+            const foliage = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4.8, 6), new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.8 }));
+            foliage.position.y = 4.6;
+            foliage.castShadow = true;
+            g.add(foliage);
+            return g;
+        }
+
+        function createWallBarrier(len = 14) {
+            const geo = new THREE.BoxGeometry(len, 2.4, 1.2);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.y = 1.2;
+            m.castShadow = true;
+            return m;
+        }
+
+        // Moving Patrol Drone / Autonomous Hazard Bot
+        function createMovingHazard(x, z, axis = 'x', range = 24, speed = 0.16) {
+            const group = new THREE.Group();
+
+            // Hazard pod
+            const podGeo = new THREE.SphereGeometry(1.2, 16, 16);
+            const podMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, metalness: 0.7, roughness: 0.2 });
+            const pod = new THREE.Mesh(podGeo, podMat);
+            pod.position.y = 1.2;
+            pod.castShadow = true;
+            group.add(pod);
+
+            // Flashing Red Warning Strobe
+            const light = new THREE.PointLight(0xef4444, 2.5, 16);
+            light.position.y = 2.2;
+            group.add(light);
+
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(1.5, 0.15, 8, 24),
+                new THREE.MeshBasicMaterial({ color: 0xfca5a5 })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 1.2;
+            group.add(ring);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+
+            return {
+                group: group,
+                startX: x,
+                startZ: z,
+                currentX: x,
+                currentZ: z,
+                axis: axis,
+                range: range,
+                speed: speed,
+                dir: 1,
+                radius: 1.8,
+                ring: ring
+            };
+        }
+
+        // Generate Structured Slalom Maze Walls
+        function generateMazeWalls() {
+            mazeWalls.forEach(w => scene.remove(w.mesh));
+            mazeWalls = [];
+
+            // Slalom barrier layout creating tight chicanes
+            const wallConfigs = [
+                { x: -35, z: -20, len: 26, rot: 0.2 },
+                { x: 30, z: -10, len: 28, rot: -0.3 },
+                { x: -20, z: 30, len: 32, rot: 0.4 },
+                { x: 25, z: 45, len: 24, rot: -0.25 },
+                { x: -50, z: -60, len: 22, rot: 1.4 }, // Vertical barrier
+                { x: 50, z: 60, len: 26, rot: 1.2 }
+            ];
+
+            wallConfigs.forEach(cfg => {
+                const wallMesh = createWallBarrier(cfg.len);
+                wallMesh.position.set(cfg.x, 1.2, cfg.z);
+                wallMesh.rotation.y = cfg.rot;
+                scene.add(wallMesh);
+
+                // Sample points along the wall for collision checks
+                const numPts = Math.ceil(cfg.len / 2.0);
+                for (let i = -numPts / 2; i <= numPts / 2; i++) {
+                    const localOffset = i * 2.0;
+                    const wx = cfg.x + Math.cos(cfg.rot) * localOffset;
+                    const wz = cfg.z - Math.sin(cfg.rot) * localOffset;
+                    staticObstacles.push({
+                        mesh: null,
+                        x: wx,
+                        z: wz,
+                        radius: 1.4
+                    });
+                }
+
+                mazeWalls.push({ mesh: wallMesh });
+            });
+        }
+
+        // Build Terrain with Chosen Difficulty
+        function buildDifficultyMap(level = 'extreme') {
+            // Clean previous items
+            staticObstacles.forEach(o => { if (o.mesh) scene.remove(o.mesh); });
+            staticObstacles = [];
+
+            movingPatrols.forEach(p => scene.remove(p.group));
+            movingPatrols = [];
+
+            let staticCount = 120;
+            let patrolCount = 6;
+            let hasWalls = true;
+
+            if (level === 'easy') {
+                staticCount = 30;
+                patrolCount = 0;
+                hasWalls = false;
+            } else if (level === 'medium') {
+                staticCount = 60;
+                patrolCount = 2;
+                hasWalls = false;
+            } else if (level === 'hard') {
+                staticCount = 90;
+                patrolCount = 4;
+                hasWalls = true;
+            } else {
+                // Extreme
+                staticCount = 125;
+                patrolCount = 7;
+                hasWalls = true;
+            }
+
+            document.getElementById('val-patrols').innerText = `${patrolCount} Active`;
+
+            if (hasWalls) {
+                generateMazeWalls();
+            } else {
+                mazeWalls.forEach(w => scene.remove(w.mesh));
+                mazeWalls = [];
+            }
+
+            // Populate scattered trees and boulders
+            const bound = TERRAIN_SIZE / 2 - 16;
+            for (let i = 0; i < staticCount; i++) {
+                const isTree = Math.random() > 0.45;
+                const mesh = isTree ? createDenseTree() : createBoulder();
+
+                let x, z, attempts = 0;
+                do {
+                    x = (Math.random() - 0.5) * (bound * 2);
+                    z = (Math.random() - 0.5) * (bound * 2);
+                    attempts++;
+                } while ((Math.hypot(x - car.position.x, z - car.position.z) < 14 || Math.hypot(x - destination.x, z - destination.z) < 9) && attempts < 40);
+
+                mesh.position.set(x, 0, z);
+                scene.add(mesh);
+
+                staticObstacles.push({
+                    mesh: mesh,
+                    x: x,
+                    z: z,
+                    radius: isTree ? 1.6 : 1.4
+                });
+            }
+
+            // Spawn Moving Hazard Patrols
+            const patrolPatches = [
+                { x: 0, z: -35, axis: 'x', range: 35, speed: 0.18 },
+                { x: -30, z: 0, axis: 'z', range: 30, speed: 0.16 },
+                { x: 35, z: -25, axis: 'z', range: 28, speed: 0.20 },
+                { x: 20, z: 20, axis: 'x', range: 32, speed: 0.17 },
+                { x: -45, z: -45, axis: 'x', range: 26, speed: 0.19 },
+                { x: 45, z: -60, axis: 'z', range: 24, speed: 0.15 },
+                { x: -10, z: 50, axis: 'x', range: 34, speed: 0.22 }
+            ];
+
+            for (let p = 0; p < Math.min(patrolCount, patrolPatches.length); p++) {
+                const cfg = patrolPatches[p];
+                movingPatrols.push(createMovingHazard(cfg.x, cfg.z, cfg.axis, cfg.range, cfg.speed));
+            }
+        }
+
+        buildDifficultyMap('extreme');
+
+        // --- 9. ADVANCED AUTONOMOUS DRIVING & REVERSE UNSTICK RECOVERY ---
+        let carPos = { x: 0, z: 0 };
+        let carYaw = 0;
+        let baseSpeed = 0.32;
+        let actualSpeed = 0.32;
+        let isRunning = true;
+        let hasArrived = false;
+        let gearMode = 'FORWARD'; // 'FORWARD' or 'REVERSING'
+        let reverseTimer = 0;
+        let reverseTurnDir = 1;
+        let avoidedCount = 0;
+        let cameraMode = 'chase';
+
+        function updateDynamicPatrols() {
+            movingPatrols.forEach(p => {
+                if (p.axis === 'x') {
+                    p.currentX += p.speed * p.dir;
+                    if (Math.abs(p.currentX - p.startX) > p.range / 2) {
+                        p.dir *= -1;
+                    }
+                } else {
+                    p.currentZ += p.speed * p.dir;
+                    if (Math.abs(p.currentZ - p.startZ) > p.range / 2) {
+                        p.dir *= -1;
+                    }
+                }
+                p.group.position.set(p.currentX, 0, p.currentZ);
+                p.ring.rotation.z += 0.05;
+            });
+        }
+
+        function checkMudSlowdown(x, z) {
+            for (let m of mudPits) {
+                if (Math.hypot(x - m.x, z - m.z) < m.radius) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function updateAutonomousDriving() {
+            if (hasArrived) {
+                actualSpeed *= 0.92;
+                return;
+            }
+
+            // Destination Distance
+            const dxGoal = destination.x - carPos.x;
+            const dzGoal = destination.z - carPos.z;
+            const distToGoal = Math.hypot(dxGoal, dzGoal);
+
+            document.getElementById('val-goal-dist').innerText = `${distToGoal.toFixed(1)} m`;
+
+            // Goal Arrival Condition
+            if (distToGoal < 3.4) {
+                hasArrived = true;
+                const banner = document.getElementById('status-banner');
+                banner.className = 'success';
+                banner.innerText = '🎉 DESTINATION REACHED! CLICK ANYWHERE TO SET NEXT WAYPOINT.';
+                return;
+            }
+
+            const targetYaw = Math.atan2(dxGoal, dzGoal);
+
+            // Combine all obstacles (static + moving patrols)
+            const allActiveObstacles = [...staticObstacles];
+            movingPatrols.forEach(p => {
+                allActiveObstacles.push({
+                    x: p.currentX,
+                    z: p.currentZ,
+                    radius: p.radius + 0.4, // Moving hazards get extra safety margin
+                    isMoving: true
+                });
+            });
+
+            // Evaluate 19 LiDAR Scanning Rays
+            let rayClearances = [];
+            let minDistanceOverall = 999;
+            let criticalFrontBlocked = true;
+
+            rayLines.forEach(ray => {
+                const worldRayAngle = carYaw + ray.angleOffset;
+                let rayDist = SENSOR_RANGE;
+
+                allActiveObstacles.forEach(obs => {
+                    const toObsX = obs.x - carPos.x;
+                    const toObsZ = obs.z - carPos.z;
+                    const obsDist = Math.hypot(toObsX, toObsZ);
+                    const obsAngleWorld = Math.atan2(toObsX, toObsZ);
+
+                    let angleDiff = obsAngleWorld - worldRayAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                    const forwardDist = Math.cos(angleDiff) * obsDist;
+                    const lateralDist = Math.abs(Math.sin(angleDiff)) * obsDist;
+
+                    if (forwardDist > 0 && forwardDist < SENSOR_RANGE && lateralDist < obs.radius + 1.25) {
+                        if (forwardDist < rayDist) {
+                            rayDist = forwardDist;
+                        }
+                    }
+
+                    if (obsDist < minDistanceOverall) {
+                        minDistanceOverall = obsDist;
+                    }
+                });
+
+                // Laser Ray Visualization
+                if (rayDist < 7.0) {
+                    ray.line.material.color.setHex(0xef4444); // Red
+                } else if (rayDist < 16.0) {
+                    ray.line.material.color.setHex(0xfacc15); // Yellow
+                } else {
+                    ray.line.material.color.setHex(0x22c55e); // Green
+                }
+
+                // If any forward ray has clearance > 8m, path is not completely blocked
+                if (Math.abs(ray.angleOffset) < 0.6 && rayDist > 7.5) {
+                    criticalFrontBlocked = false;
+                }
+
+                rayClearances.push({
+                    angleOffset: ray.angleOffset,
+                    worldAngle: worldRayAngle,
+                    clearance: rayDist
+                });
+            });
+
+            const banner = document.getElementById('status-banner');
+
+            // --- REVERSE UNSTICK RECOVERY STATE MACHINE ---
+            // If completely blocked by dead-end walls or close obstacles, back up and pivot
+            if (gearMode === 'REVERSING') {
+                reverseTimer--;
+                carPos.x -= Math.sin(carYaw) * (baseSpeed * 0.7);
+                carPos.z -= Math.cos(carYaw) * (baseSpeed * 0.7);
+                carYaw += reverseTurnDir * 0.04;
+
+                banner.className = 'reversing';
+                banner.innerText = `🔄 REVERSING: BACKING OUT OF DEAD END TRAP (${reverseTimer})`;
+
+                if (reverseTimer <= 0) {
+                    gearMode = 'FORWARD';
+                    document.getElementById('val-gear').innerText = 'FORWARD';
+                    document.getElementById('val-gear').style.color = '#4ade80';
+                }
+
+                car.position.set(carPos.x, 0, carPos.z);
+                car.rotation.y = carYaw;
+                return;
+            } else if (criticalFrontBlocked && minDistanceOverall < 4.5) {
+                // Engage Reverse Recovery!
+                gearMode = 'REVERSING';
+                reverseTimer = 45; // ~1.5 seconds of reverse
+                reverseTurnDir = (Math.random() > 0.5 ? 1 : -1);
+                document.getElementById('val-gear').innerText = 'REVERSE';
+                document.getElementById('val-gear').style.color = '#c084fc';
+                return;
+            }
+
+            // Normal Forward Pathfinding Decision
+            let bestCost = Infinity;
+            let chosenRayAngle = 0;
+
+            rayClearances.forEach(ray => {
+                let goalDiff = targetYaw - ray.worldAngle;
+                while (goalDiff > Math.PI) goalDiff -= Math.PI * 2;
+                while (goalDiff < -Math.PI) goalDiff += Math.PI * 2;
+
+                let obstaclePenalty = 0;
+                if (ray.clearance < SENSOR_RANGE) {
+                    obstaclePenalty = Math.pow((SENSOR_RANGE - ray.clearance) / SENSOR_RANGE, 2) * 8.5;
+                }
+                if (ray.clearance < 7.0) {
+                    obstaclePenalty += 60.0;
+                }
+
+                const totalCost = Math.abs(goalDiff) * 1.5 + obstaclePenalty;
+
+                if (totalCost < bestCost) {
+                    bestCost = totalCost;
+                    chosenRayAngle = ray.angleOffset;
+                }
+            });
+
+            // Mud Pit Slowdown Check
+            const inMud = checkMudSlowdown(carPos.x, carPos.z);
+            let currentTargetSpeed = baseSpeed;
+
+            if (inMud) {
+                currentTargetSpeed *= 0.45; // Mud penalty
+                banner.className = 'warning';
+                banner.innerText = `⚠️ SLIPPERY MUD PIT: TRACTION REDUCED 50%!`;
+            } else if (minDistanceOverall < 12.0) {
+                currentTargetSpeed *= 0.75;
+                banner.className = 'danger';
+                banner.innerText = `🚨 EXTREME HAZARD NEARBY! EVADING (Dist: ${minDistanceOverall.toFixed(1)}m)`;
+                avoidedCount++;
+                document.getElementById('val-avoided').innerText = Math.floor(avoidedCount / 10);
+            } else {
+                banner.className = '';
+                banner.innerText = `🟢 NAVIGATING HIGH-DIFFICULTY MAZE (Goal: ${distToGoal.toFixed(1)}m)`;
+            }
+
+            // Smooth Steering & Velocity Actuation
+            const steeringRate = inMud ? 0.035 : 0.065;
+            carYaw += chosenRayAngle * steeringRate;
+
+            while (carYaw > Math.PI) carYaw -= Math.PI * 2;
+            while (carYaw < -Math.PI) carYaw += Math.PI * 2;
+
+            actualSpeed += (currentTargetSpeed - actualSpeed) * 0.12;
+
+            carPos.x += Math.sin(carYaw) * actualSpeed;
+            carPos.z += Math.cos(carYaw) * actualSpeed;
+
+            car.position.set(carPos.x, 0, carPos.z);
+            car.rotation.y = carYaw;
+        }
+
+        // --- 10. 2D RADAR MINI-MAP RENDERER ---
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        const MAP_SCALE = minimapCanvas.width / TERRAIN_SIZE;
+
+        function drawMiniMap() {
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+
+            minimapCtx.clearRect(0, 0, w, h);
+
+            // Dark Radar Screen
+            minimapCtx.fillStyle = 'rgba(8, 12, 20, 0.95)';
+            minimapCtx.fillRect(0, 0, w, h);
+
+            function toMapX(wx) { return (wx + TERRAIN_SIZE / 2) * MAP_SCALE; }
+            function toMapY(wz) { return (wz + TERRAIN_SIZE / 2) * MAP_SCALE; }
+
+            // Mud zones (brown circles)
+            minimapCtx.fillStyle = 'rgba(180, 83, 9, 0.4)';
+            mudPits.forEach(m => {
+                minimapCtx.beginPath();
+                minimapCtx.arc(toMapX(m.x), toMapY(m.z), m.radius * MAP_SCALE, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+
+            // Static Obstacles (Red dots)
+            minimapCtx.fillStyle = '#94a3b8';
+            staticObstacles.forEach(o => {
+                minimapCtx.beginPath();
+                minimapCtx.arc(toMapX(o.x), toMapY(o.z), 1.8, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+
+            // Moving Patrol Hazards (Flashing Bright Red)
+            minimapCtx.fillStyle = '#ef4444';
+            movingPatrols.forEach(p => {
+                minimapCtx.beginPath();
+                minimapCtx.arc(toMapX(p.currentX), toMapY(p.currentZ), 3.2, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+
+            // Trajectory Line
+            minimapCtx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+            minimapCtx.setLineDash([3, 3]);
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(toMapX(carPos.x), toMapY(carPos.z));
+            minimapCtx.lineTo(toMapX(destination.x), toMapY(destination.z));
+            minimapCtx.stroke();
+            minimapCtx.setLineDash([]);
+
+            // Destination
+            const destMx = toMapX(destination.x);
+            const destMy = toMapY(destination.z);
+            minimapCtx.fillStyle = '#facc15';
+            minimapCtx.beginPath();
+            minimapCtx.arc(destMx, destMy, 4.5, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            // Car Triangle
+            const carMx = toMapX(carPos.x);
+            const carMy = toMapY(carPos.z);
+
+            minimapCtx.save();
+            minimapCtx.translate(carMx, carMy);
+            minimapCtx.rotate(-carYaw + Math.PI);
+            minimapCtx.fillStyle = '#38bdf8';
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(0, -6);
+            minimapCtx.lineTo(-4, 5);
+            minimapCtx.lineTo(4, 5);
+            minimapCtx.closePath();
+            minimapCtx.fill();
+            minimapCtx.restore();
+        }
+
+        // Mini-map click
+        minimapCanvas.addEventListener('click', (e) => {
+            const rect = minimapCanvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const wx = (clickX / MAP_SCALE) - (TERRAIN_SIZE / 2);
+            const wz = (clickY / MAP_SCALE) - (TERRAIN_SIZE / 2);
+            updateDestination(wx, wz);
+        });
+
+        // --- 11. MAIN ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isRunning) {
+                updateDynamicPatrols();
+                updateAutonomousDriving();
+
+                wheels.forEach(w => {
+                    w.rotation.x += (gearMode === 'REVERSING' ? -1 : 1) * actualSpeed * 1.8;
+                });
+
+                lidarDome.rotation.y += 0.2;
+                diamond.rotation.y += 0.03;
+                diamond.position.y = 4.5 + Math.sin(Date.now() * 0.003) * 0.4;
+                innerRing.rotation.z += 0.02;
+            }
+
+            drawMiniMap();
+
+            // Camera Tracking
+            if (cameraMode === 'chase') {
+                const camDist = 14;
+                const camHeight = 6.0;
+                camera.position.x = car.position.x - Math.sin(carYaw) * camDist;
+                camera.position.y = camHeight;
+                camera.position.z = car.position.z - Math.cos(carYaw) * camDist;
+                camera.lookAt(car.position.x + Math.sin(carYaw) * 12, 1.2, car.position.z + Math.cos(carYaw) * 12);
+            } else if (cameraMode === 'top') {
+                camera.position.set(car.position.x, 65, car.position.z);
+                camera.lookAt(car.position.x, 0, car.position.z);
+            } else if (cameraMode === 'hood') {
+                camera.position.set(car.position.x, 1.6, car.position.z);
+                camera.lookAt(car.position.x + Math.sin(carYaw) * 20, 1.2, car.position.z + Math.cos(carYaw) * 20);
+            } else {
+                controls.update();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- 12. CLICK TERRAIN TO SET DESTINATION ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            if (event.clientY < 90 || event.clientY > window.innerHeight - 85) return;
+            if (event.clientX > window.innerWidth - 200 && event.clientY < 270) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(terrain);
+
+            if (intersects.length > 0) {
+                const pt = intersects[0].point;
+                updateDestination(pt.x, pt.z);
+            }
+        });
+
+        // --- 13. UI EVENT LISTENERS ---
+        const playBtn = document.getElementById('btn-play-pause');
+        playBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            playBtn.innerText = isRunning ? '⏸️ Pause' : '▶️ Resume';
+        });
+
+        document.getElementById('btn-random-goal').addEventListener('click', () => {
+            const bound = TERRAIN_SIZE / 2 - 25;
+            const rx = (Math.random() - 0.5) * (bound * 2);
+            const rz = (Math.random() - 0.5) * (bound * 2);
+            updateDestination(rx, rz);
+        });
+
+        document.getElementById('btn-reset-car').addEventListener('click', () => {
+            carPos.x = 0;
+            carPos.z = 0;
+            carYaw = 0;
+            hasArrived = false;
+            gearMode = 'FORWARD';
+            document.getElementById('val-gear').innerText = 'FORWARD';
+            document.getElementById('val-gear').style.color = '#4ade80';
+            car.position.set(0, 0, 0);
+            car.rotation.y = 0;
+            document.getElementById('status-banner').className = '';
+            document.getElementById('status-banner').innerText = '🟢 VEHICLE RESET. NAVIGATING TO DESTINATION...';
+        });
+
+        // Difficulty Buttons
+        const diffBtns = document.querySelectorAll('.btn-diff');
+        diffBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                diffBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const diff = btn.dataset.diff;
+                buildDifficultyMap(diff);
+                hasArrived = false;
+            });
+        });
+
+        const speedSlider = document.getElementById('speed-slider');
+        speedSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            baseSpeed = val * 0.01;
+            document.getElementById('val-speed').innerText = `${val} km/h`;
+        });
+
+        // Camera mode buttons
+        const camBtns = {
+            'chase': document.getElementById('cam-chase'),
+            'top': document.getElementById('cam-top'),
+            'hood': document.getElementById('cam-hood'),
+            'free': document.getElementById('cam-free')
+        };
+
+        Object.keys(camBtns).forEach(mode => {
+            camBtns[mode].addEventListener('click', () => {
+                cameraMode = mode;
+                Object.values(camBtns).forEach(b => b.classList.remove('active'));
+                camBtns[mode].classList.add('active');
+                if (mode === 'free') {
+                    controls.target.copy(car.position);
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
